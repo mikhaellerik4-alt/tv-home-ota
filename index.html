@@ -13,8 +13,8 @@
     <script>
 (function () {
   var OTA = "https://mikhaellerik4-alt.github.io/tv-home-ota/";
-  var LOCAL = { v: "BzMq4Zu7", js: "./assets/index-BzMq4Zu7.js", css: "./assets/index-yvPX_Wca.css" };
-  var KEY = "tvhome.ota";
+  var LOCAL = { v: "mnGuYDU1", js: "./assets/index-mnGuYDU1.js", css: "./assets/index-yvPX_Wca.css" };
+  var KEY = "tvhome.ota", BAD = "tvhome.ota.bad";
   var forceLocal = /[?&]local=1/.test(location.search);
   var here = location.href.indexOf(OTA) === 0;      // aberto direto no site publicado: usa o que está lá
 
@@ -26,7 +26,11 @@
     // se a versão baixada não desenhar nada em 6 s, volta para a embutida (e esquece a baixada)
     if (remote) setTimeout(function () { var r = document.getElementById("root"); if (!r || !r.firstChild) back(); }, 6000);
   }
-  function back() { try { localStorage.removeItem(KEY); } catch (e) {} location.replace(location.pathname + "?local=1"); }
+  // versão baixada que não desenhou ou deu erro: esquece e NUNCA mais escolhe essa mesma versão
+  function back() {
+    try { var cur = JSON.parse(localStorage.getItem(KEY) || "null"); if (cur && cur.v) localStorage.setItem(BAD, cur.v); localStorage.removeItem(KEY); } catch (e) {}
+    location.replace(location.pathname + "?local=1");
+  }
 
   var saved = null;
   try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) {}
@@ -39,17 +43,20 @@
     start(LOCAL.js, LOCAL.css, false);
   }
 
+  window.__otaStep = 'iniciou';
   if (here) return;
   // em segundo plano: descobre a versão publicada e confere se os arquivos dela baixam
   fetch(OTA + "manifest.json?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (m) {
+    window.__otaStep = 'manifest ' + (m && m.v);
     if (!m || !m.v || !m.js) return;
     if (m.v === LOCAL.v) { try { localStorage.removeItem(KEY); } catch (e) {} return; }
     if (saved && saved.v === m.v && saved.ok) return;
+    try { if (localStorage.getItem(BAD) === m.v) return; } catch (e) {}   // essa versão já falhou aqui
     return fetch(OTA + m.js, { cache: "force-cache" }).then(function (r) { if (!r.ok) throw 0; return r.text(); }).then(function () {
       try { localStorage.setItem(KEY, JSON.stringify({ v: m.v, js: m.js, css: m.css, ok: true })); } catch (e) {}
       window.__otaPending = m.v;
     });
-  }).catch(function () {});
+  }).catch(function (e) { window.__otaErr = String(e && e.message || e); });
 
   // versão nova baixada: aplica quando a TV Home volta para a frente (sem interromper o uso)
   document.addEventListener("visibilitychange", function () {
