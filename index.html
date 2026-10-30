@@ -13,7 +13,7 @@
     <script>
 (function () {
   var OTA = "https://mikhaellerik4-alt.github.io/tv-home-ota/";
-  var LOCAL = { v: "BzMq4Zu7", js: "./assets/index-BzMq4Zu7.js", css: "./assets/index-yvPX_Wca.css" };
+  var LOCAL = { v: "CRiVDg5M", js: "./assets/index-CRiVDg5M.js", css: "./assets/index-yvPX_Wca.css" };
   var KEY = "tvhome.ota", BAD = "tvhome.ota.bad";
   var forceLocal = /[?&]local=1/.test(location.search);
   var here = location.href.indexOf(OTA) === 0;      // aberto direto no site publicado: usa o que está lá
@@ -47,8 +47,10 @@
   if (here) return;
 
   // descobre a versão publicada e confere se os arquivos dela baixam; guarda para a próxima abertura
+  var tries = 0;
   function check() {
     fetch(OTA + "manifest.json?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (m) {
+      tries = 0;
       window.__otaStep = "manifest " + (m && m.v);
       if (!m || !m.v || !m.js) return;
       var cur = null;
@@ -56,21 +58,29 @@
       if (m.v === LOCAL.v) { try { localStorage.removeItem(KEY); } catch (e) {} return; }
       if (cur && cur.v === m.v && cur.ok) { window.__otaPending = m.v; return; }
       try { if (localStorage.getItem(BAD) === m.v) return; } catch (e) {}   // essa versão já falhou aqui
-      return fetch(OTA + m.js, { cache: "force-cache" }).then(function (r) { if (!r.ok) throw 0; return r.text(); }).then(function () {
+      return fetch(OTA + m.js, { cache: "force-cache" }).then(function (r) { if (!r.ok) throw new Error("js " + r.status); return r.text(); }).then(function () {
         try { localStorage.setItem(KEY, JSON.stringify({ v: m.v, js: m.js, css: m.css, ok: true })); } catch (e) {}
         window.__otaPending = m.v;
       });
-    }).catch(function (e) { window.__otaErr = String(e && e.message || e); });
+    }).catch(function (e) {
+      window.__otaErr = String(e && e.message || e);
+      // rede ainda subindo (logo após ligar a TV) ou site fora do ar: tenta de novo em 20 s, 1 min, 5 min...
+      if (tries < 6) setTimeout(check, [20, 60, 300, 300, 600, 600][tries++] * 1000);
+    });
   }
   check();
   setInterval(check, 15 * 60 * 1000);
 
-  // volta para a tela: se já há versão nova baixada, aplica agora; senão, confere de novo
-  document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState !== "visible") return;
+  // Quando o usuário volta para a tela inicial (Início/Voltar, voltar de outro app): aplica a versão
+  // nova se já estiver baixada; senão confere de novo.
+  function shown() {
     if (window.__otaPending && window.__otaPending !== window.__ota.running) location.reload();
     else check();
-  });
+  }
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") shown(); });
+  window.addEventListener("focus", shown);
+  document.addEventListener("resume", shown);
+  window.addEventListener("tvhomeback", function () { if (window.__otaPending && window.__otaPending !== window.__ota.running) location.reload(); });
 })();
     </script>
   </body>
