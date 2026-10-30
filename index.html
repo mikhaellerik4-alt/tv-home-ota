@@ -13,7 +13,7 @@
     <script>
 (function () {
   var OTA = "https://mikhaellerik4-alt.github.io/tv-home-ota/";
-  var LOCAL = { v: "mnGuYDU1", js: "./assets/index-mnGuYDU1.js", css: "./assets/index-yvPX_Wca.css" };
+  var LOCAL = { v: "CM7x5Gbv", built: "2026-10-30T02:31:21.617Z", js: "./assets/index-CM7x5Gbv.js", css: "./assets/index-vrtSbm4Q.css" };
   var KEY = "tvhome.ota", BAD = "tvhome.ota.bad";
   var forceLocal = /[?&]local=1/.test(location.search);
   var here = location.href.indexOf(OTA) === 0;      // aberto direto no site publicado: usa o que está lá
@@ -56,6 +56,8 @@
       var cur = null;
       try { cur = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) {}
       if (m.v === LOCAL.v) { try { localStorage.removeItem(KEY); } catch (e) {} return; }
+      // só adota a publicada se for MAIS NOVA que a embutida (APK novo não pode ser rebaixado por um OTA velho)
+      if (!m.built || m.built <= LOCAL.built) { try { localStorage.removeItem(KEY); } catch (e) {} return; }
       if (cur && cur.v === m.v && cur.ok) { window.__otaPending = m.v; return; }
       try { if (localStorage.getItem(BAD) === m.v) return; } catch (e) {}   // essa versão já falhou aqui
       return fetch(OTA + m.js, { cache: "force-cache" }).then(function (r) { if (!r.ok) throw new Error("js " + r.status); return r.text(); }).then(function () {
