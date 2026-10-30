@@ -4,13 +4,58 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#07090f" />
-    <meta name="description" content="Tela inicial para Android TV com atalhos grandes, controle pelo celular e troca de botão do controle." />
     <link rel="icon" href="./favicon.ico" />
     <title>TV Home</title>
-    <script type="module" crossorigin src="./assets/index-BzMq4Zu7.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-yvPX_Wca.css">
+    <style>html,body{margin:0;background:#07090f}</style>
   </head>
   <body>
     <div id="root"></div>
+    <script>
+(function () {
+  var OTA = "https://mikhaellerik4-alt.github.io/tv-home-ota/";
+  var LOCAL = { v: "BzMq4Zu7", js: "./assets/index-BzMq4Zu7.js", css: "./assets/index-yvPX_Wca.css" };
+  var KEY = "tvhome.ota";
+  var forceLocal = /[?&]local=1/.test(location.search);
+  var here = location.href.indexOf(OTA) === 0;      // aberto direto no site publicado: usa o que está lá
+
+  function start(js, css, remote) {
+    if (css) { var l = document.createElement("link"); l.rel = "stylesheet"; l.href = css; document.head.appendChild(l); }
+    var s = document.createElement("script"); s.type = "module"; s.src = js;
+    s.onerror = function () { if (remote) back(); };
+    document.body.appendChild(s);
+    // se a versão baixada não desenhar nada em 6 s, volta para a embutida (e esquece a baixada)
+    if (remote) setTimeout(function () { var r = document.getElementById("root"); if (!r || !r.firstChild) back(); }, 6000);
+  }
+  function back() { try { localStorage.removeItem(KEY); } catch (e) {} location.replace(location.pathname + "?local=1"); }
+
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) {}
+  window.__ota = { running: LOCAL.v, remote: false };
+
+  if (!forceLocal && !here && saved && saved.v && saved.v !== LOCAL.v && saved.ok) {
+    window.__ota = { running: saved.v, remote: true };
+    start(OTA + saved.js, saved.css ? OTA + saved.css : "", true);
+  } else {
+    start(LOCAL.js, LOCAL.css, false);
+  }
+
+  if (here) return;
+  // em segundo plano: descobre a versão publicada e confere se os arquivos dela baixam
+  fetch(OTA + "manifest.json?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (m) {
+    if (!m || !m.v || !m.js) return;
+    if (m.v === LOCAL.v) { try { localStorage.removeItem(KEY); } catch (e) {} return; }
+    if (saved && saved.v === m.v && saved.ok) return;
+    return fetch(OTA + m.js, { cache: "force-cache" }).then(function (r) { if (!r.ok) throw 0; return r.text(); }).then(function () {
+      try { localStorage.setItem(KEY, JSON.stringify({ v: m.v, js: m.js, css: m.css, ok: true })); } catch (e) {}
+      window.__otaPending = m.v;
+    });
+  }).catch(function () {});
+
+  // versão nova baixada: aplica quando a TV Home volta para a frente (sem interromper o uso)
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && window.__otaPending && window.__otaPending !== window.__ota.running) location.reload();
+  });
+})();
+    </script>
   </body>
 </html>
